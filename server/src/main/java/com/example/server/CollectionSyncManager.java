@@ -186,7 +186,6 @@ public class CollectionSyncManager {
         }
     }
 
-
     /**
      * Сортирует всю коллекцию.
      */

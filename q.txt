@@ -2,4 +2,3 @@ login aaa aaa
 show
 info
 head
-run w.txt

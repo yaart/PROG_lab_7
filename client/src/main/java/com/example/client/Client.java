@@ -27,7 +27,6 @@ import java.util.Scanner;
  * </ul>
  * </p>
  *
- * <p><b>Важно:</b> Используется Jackson для сериализации/десериализации JSON.</p>
  */
 public class Client {
     private static User user;
@@ -60,7 +59,7 @@ public class Client {
              Scanner consoleScanner = new Scanner(System.in)) {
 
             System.out.println("Connected to server at " + SERVER_HOST + ":" + SERVER_PORT);
-            System.out.println("Enter commands (e.g., 'register user pass', 'login user pass', 'echo message', 'exit')");
+            System.out.println("Введите команды ('register user pass', 'login user pass')");
 
             String userInput;
             while (true) {
@@ -73,7 +72,7 @@ public class Client {
                 userInput = consoleScanner.nextLine();
 
                 if (userInput == null || userInput.trim().isEmpty()) {
-                    System.out.println("Please enter a command");
+                    System.out.println("Введите команду");
                     continue;
                 }
 
@@ -126,19 +125,18 @@ public class Client {
         final String commandType = tokens[0];
 
         Command command;
-        if (commandType.equals("run")) {
+        if (commandType.equals("execute_script")) {
             if (scripts.contains(tokens[1])) {
                 System.out.println("Рекурсия: " + scripts);
                 return null;
             }
+
 
             try (BufferedReader reader = new BufferedReader(new FileReader(tokens[1]))) {
                     String input;
                     while ((input = reader.readLine()) != null) {
                         input = input.trim();
                         if (input.isEmpty()) continue;
-
-                        System.out.println("Выполняется команда: " + input);
 
                         try {
                             final List<String> newScripts = new ArrayList<>(List.copyOf(scripts));
@@ -197,7 +195,7 @@ public class Client {
                     command = new UserCommand(commandType, List.of(tokens[1]), user);
                     break;
                 case "exit", "help", "info", "clear", "head", "show", "remove_first", "print_unique_tuned_in_works",
-                     "print_field_ascending_discipline":
+                     "print_field_ascending_discipline", "show_owner":
                     command = new UserCommand(commandType, List.of(), user);
                     break;
                 default:

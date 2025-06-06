@@ -103,6 +103,22 @@ public class ClientHandler implements Runnable {
      * @return объект {@link Response} с результатом выполнения команды
      */
     private Response processCommand(Command command) {
+        String help_text = "Справка по командам:\n" +
+                " add                  - add {element}: добавить новый элемент в коллекцию\n" +
+                " clear                - clear: очистить коллекцию\n" +
+                " count_less_than_discipline - count_less_than_discipline {discipline}: подсчёт количества элементов, у которых дисциплина меньше заданной\n" +
+                " filter_by_size       - filter_by_size {size}: вывести элементы, размер которых меньше заданного\n" +
+                " head                 - head : вывести первый элемент коллекции\n" +
+                " help                 - help : вывести справку по доступным командам\n" +
+                " info                 - info : вывести информацию о коллекции\n" +
+                " print_field_ascending_discipline - print_field_ascending_discipline : вывести все дисциплины из коллекции в порядке возрастания\n" +
+                " print_unique_tuned_in_works - print_unique_tuned_in_works : вывести уникальные значения поля tunedInWorks\n" +
+                " remove_by_id         - remove_by_id id : удалить элемент из коллекции по его ID\n" +
+                " remove_first         - remove_first : удалить первый элемент из коллекции\n" +
+                " remove_lower         - remove_lower id : удалить все элементы с ID меньше указанного\n" +
+                " show                 - show : вывести все элементы коллекции\n" +
+                " update               - update id {element} : обновить значение элемента коллекции, id которого равен заданному\n";
+
         if (command instanceof UserCommand userCommand) {
             boolean authenticated = validateCredentials(userCommand.user);
             if (!authenticated) {
@@ -115,7 +131,7 @@ public class ClientHandler implements Runnable {
                 case "count_less_than_discipline" -> handleCountLessThanDiscipline(userCommand);
                 case "filter_by_size" -> handleFilterBySize(userCommand);
                 case "head" -> handleHead(userCommand);
-                case "help" -> new Response("HELP: Some info");
+                case "help" -> new Response(help_text);
                 case "info" -> handleInfo();
                 case "print_field_ascending_discipline" -> handlePrintFieldAscendingDiscipline(userCommand);
                 case "print_unique_tuned_in_works" -> handlePrintUniqueTunedInWorks();
@@ -125,6 +141,7 @@ public class ClientHandler implements Runnable {
                 case "show" -> handleShow(userCommand);
                 case "update" -> handleUpdateId(userCommand);
                 case "exit" -> new Response("INFO: Exiting");
+                case "show_owner" -> handleShowOwner(userCommand);
                 default -> new Response("ERROR: Unknown command: " + command);
             };
         } else {
@@ -237,6 +254,44 @@ public class ClientHandler implements Runnable {
 
         try {
             List<LabWork> labWorks = ServiceLocator.collectionSyncManager.getAllByOwner(command.user.username).stream()
+                    .distinct()
+                    .sorted()
+                    .toList();
+
+            if (labWorks.isEmpty()) {
+                return new Response("Empty");
+            }
+
+            String responseText = labWorks.stream()
+                    .map(LabWork::toString)
+                    .collect(Collectors.joining("\n"));
+
+            return new Response(responseText);
+        } catch (Exception e) {
+            return new Response("ERROR: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Возвращает все элементы коллекции, принадлежащие текущему пользователю.
+     * <p>
+     * Метод извлекает данные из {@link CollectionSyncManager}, фильтрует их по владельцу,
+     * убирает дубликаты, сортирует и формирует текстовый ответ со списком элементов.
+     * </p>
+     *
+     * <p>Если коллекция пользователя пуста, возвращается сообщение "Empty".</p>
+     *
+     * @param command команда от пользователя, содержащая информацию о владельце (пользователе)
+     * @return объект {@link Response}, содержащий:
+     *         <ul>
+     *             <li>список всех элементов пользователя, разделённых переводом строки</li>
+     *             <li>сообщение "Empty", если элементов нет</li>
+     *             <li>ошибку, если произошло исключение</li>
+     *         </ul>
+     */
+    private Response handleShowOwner(UserCommand command) {
+        try {
+            List<LabWork> labWorks = ServiceLocator.collectionSyncManager.getAll().stream()
                     .distinct()
                     .sorted()
                     .toList();

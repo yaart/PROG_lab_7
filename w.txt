@@ -2,4 +2,4 @@ login aaa aaa
 show
 info
 head
-run q.txt
+execute_script q.txt
