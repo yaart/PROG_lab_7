@@ -14,6 +14,17 @@ import java.util.stream.Collectors;
 
 import static java.lang.Math.pow;
 
+/**
+ * Обработчик клиентского подключения.
+ * <p>
+ * Этот класс реализует {@link Runnable} и предназначен для обслуживания одного клиента через TCP-сокет.
+ *
+ * <p>Каждое соединение обрабатывается в отдельном потоке.</p>
+ *
+ * @see ClientHandler#run() — точка входа для потока
+ * @see Command — базовый класс команд
+ * @see UserCommand — команда, связанная с пользователем
+ */
 public class ClientHandler implements Runnable {
     private final Socket clientSocket;
     private PrintWriter out;
@@ -25,10 +36,34 @@ public class ClientHandler implements Runnable {
         this.clientSocket = socket;
     }
 
+    /**
+     * Проверяет учетные данные пользователя.
+     * <p>
+     * Используется для подтверждения прав доступа перед выполнением команд,
+     * требующих авторизации.
+     * </p>
+     *
+     * @param user объект пользователя, чьи учетные данные нужно проверить
+     * @return true, если пользователь существует и пароль верен; иначе false
+     */
     boolean validateCredentials(User user) {
         return ServiceLocator.userDataBaseService.validateCredentials(user.username, user.pass);
     }
 
+    /**
+     * Основной метод, управляющий взаимодействием с клиентом.
+     * <p>
+     * Запускается при старте потока и обслуживает одного клиента через сокет:
+     * <ul>
+     *     <li>Чтение команд от клиента</li>
+     *     <li>Десериализация JSON в объект {@link Command}</li>
+     *     <li>Обработка команды</li>
+     *     <li>Отправка ответа клиенту</li>
+     * </ul>
+     * </p>
+     *
+     * <p>После завершения общения закрывает все ресурсы (ввод/вывод, сокет).</p>
+     */
     @Override
     public void run() {
         try {
@@ -57,6 +92,16 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    /**
+     * Обрабатывает полученную команду и возвращает соответствующий ответ.
+     * <p>
+     * Если команда является экземпляром {@link UserCommand}, проверяет аутентификацию пользователя.
+     * В зависимости от типа команды вызывает соответствующий обработчик.
+     * </p>
+     *
+     * @param command полученная команда от клиента
+     * @return объект {@link Response} с результатом выполнения команды
+     */
     private Response processCommand(Command command) {
         if (command instanceof UserCommand userCommand) {
             boolean authenticated = validateCredentials(userCommand.user);
@@ -92,6 +137,16 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    /**
+     * Регистрирует нового пользователя в системе.
+     * <p>
+     * Передает данные в сервис базы данных. При ошибке возвращает сообщение о неудаче.
+     * </p>
+     *
+     * @param username имя пользователя
+     * @param password пароль пользователя
+     * @return ответ с результатом регистрации
+     */
     private Response handleRegister(String username, String password) {
         try {
             ServiceLocator.userDataBaseService.registerNewUser(username, password);
@@ -104,6 +159,16 @@ public class ClientHandler implements Runnable {
         return new Response("SUCCESS: User registered successfully.");
     }
 
+    /**
+     * Выполняет вход пользователя в систему.
+     * <p>
+     * Проверяет учетные данные и возвращает результат аутентификации.
+     * </p>
+     *
+     * @param username имя пользователя
+     * @param password пароль пользователя
+     * @return ответ с информацией об успешном или неудачном входе
+     */
     private Response handleLogin(String username, String password) {
         if (ServiceLocator.userDataBaseService.validateCredentials(username, password)) {
             System.out.println("User logged in: " + username);
@@ -114,6 +179,14 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    /**
+     * Возвращает информацию о текущем состоянии коллекции.
+     * <p>
+     * Информация включает тип коллекции, дату создания и количество элементов.
+     * </p>
+     *
+     * @return ответ с информацией о коллекции
+     */
     private Response handleInfo() {
         String type = ServiceLocator.collectionSyncManager.getCollectionType();
         ZonedDateTime creationDate = ServiceLocator.collectionSyncManager.getCreationDate();
@@ -123,12 +196,16 @@ public class ClientHandler implements Runnable {
                 "\nЧисло элементов: " + size);
     }
 
+    /**
+     * Очищает коллекцию пользователя
+     *
+     * @param command команда, содержащая добавляемый элемент
+     * @return ответ с результатом операции
+     */
     private Response handleClear(UserCommand command) {
         try {
-            // Удаление из БД (только своих элементов)
             ServiceLocator.collectionDataBaseService.clearCollection(command.user.username);
 
-            // Очистка коллекции в памяти
             ServiceLocator.collectionSyncManager.clear(command.user.username);
 
             return new Response("Коллекция очищена");
@@ -137,6 +214,11 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    /**
+     * Возвращает верхний элемент коллекции пользователя
+     *
+     * @return ответ с результатом операции
+     */
     private Response handleHead(UserCommand command) {
         List<LabWork> list = ServiceLocator.collectionSyncManager.getAllByOwner(command.user.username);
 
@@ -147,6 +229,10 @@ public class ClientHandler implements Runnable {
         return new Response(list.get(0).toString());
     }
 
+    /**
+     * Возвращает всю коллекцию пользователя.
+     * @return ответ с информацией о коллекции
+     */
     private Response handleShow(UserCommand command) {
 
         try {
@@ -169,6 +255,15 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    /**
+     * Удаляет элементы коллекции с Id меньшим чем переданное.
+     * <p>
+     * Проверяет принадлежность элемента пользователю, удаляет из БД и коллекции.
+     * </p>
+     *
+     * @param command команда, содержащая ID удаляемого элемента
+     * @return ответ с результатом удаления
+     */
     private Response handleRemoveLower(UserCommand command) {
         try {
             int keyId = Integer.parseInt(command.arguments.get(0).toString());
@@ -195,6 +290,15 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    /**
+     * Удаляет верхний элемент коллекции.
+     * <p>
+     * Проверяет принадлежность элемента пользователю, удаляет из БД и коллекции.
+     * </p>
+     *
+     * @param command команда, содержащая ID удаляемого элемента
+     * @return ответ с результатом удаления
+     */
     private Response handleRemoveFirst(UserCommand command) {
         List<LabWork> usersElements = ServiceLocator.collectionSyncManager.getAllByOwner(command.user.username);
 
@@ -212,12 +316,21 @@ public class ClientHandler implements Runnable {
             ServiceLocator.collectionDataBaseService.deleteLabWorkById(idToRemove, command.user.username); // удаление из БД
             ServiceLocator.collectionSyncManager.removeIf(idToRemove, command.user.username); // удаление из коллекции
 
-            return new Response("Первый ваш элемент (ID: " + idToRemove + ") удален.");
+            return new Response("Первый верхний элемент (ID: " + idToRemove + ") удален.");
         } catch (RuntimeException ex) {
             return new Response("Ошибка при удалении из базы данных");
         }
     }
 
+    /**
+     * Удаляет элемент коллекции по указанному ID.
+     * <p>
+     * Проверяет принадлежность элемента пользователю, удаляет из БД и коллекции.
+     * </p>
+     *
+     * @param command команда, содержащая ID удаляемого элемента
+     * @return ответ с результатом удаления
+     */
     private Response handleRemoveById(UserCommand command) {
         try {
             int id = Integer.parseInt(command.arguments.get(0).toString());
@@ -236,6 +349,16 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    /**
+     * Возвращает список уникальных значений поля {@code tunedInWorks} из коллекции.
+     * <p>
+     * Метод собирает все ненулевые значения поля {@code tunedInWorks} из элементов коллекции,
+     * фильтрует дубликаты, сортирует их и формирует текстовый ответ.
+     * </p>
+     *
+     * @return объект {@link Response}, содержащий отсортированный список уникальных значений
+     *         или сообщение о том, что таких элементов нет
+     */
     private Response handlePrintUniqueTunedInWorks() {
         Set<Integer> uniqueValues = ServiceLocator.collectionSyncManager.getForRead().stream()
                 .map(LabWork::getTunedInWorks)
@@ -256,7 +379,17 @@ public class ClientHandler implements Runnable {
         return new Response(responseText);
 
     }
-
+    /**
+     * Возвращает список уникальных названий дисциплин из коллекции, отсортированных по алфавиту.
+     * <p>
+     * Метод собирает названия дисциплин из всех элементов коллекции, у которых поле
+     * {@code discipline} не равно null, убирает дубликаты и сортирует результат.
+     * </p>
+     *
+     * @param command команда пользователя, не используется напрямую, но требуется для сигнатуры
+     * @return объект {@link Response}, содержащий отсортированный список дисциплин
+     *         или сообщение об отсутствии элементов с дисциплинами
+     */
     private Response handlePrintFieldAscendingDiscipline(UserCommand command) {
 
         List<String> disciplines = ServiceLocator.collectionSyncManager.getForRead().stream()
@@ -275,7 +408,16 @@ public class ClientHandler implements Runnable {
         return new Response(responseText);
 
     }
-
+    /**
+     * Фильтрует элементы коллекции по размеру координат.
+     * <p>
+     * Размер вычисляется как евклидова норма: √(x² + y²).
+     * Возвращаются только те элементы, у которых эта величина меньше или равна заданному размеру.
+     * </p>
+     *
+     * @param command команда пользователя, содержащая один аргумент — максимальный размер
+     * @return объект {@link Response}, содержащий количество найденных элементов
+     */
     private Response handleFilterBySize(UserCommand command) {
         int size = Integer.parseInt(command.arguments.get(0).toString());
 
@@ -291,6 +433,15 @@ public class ClientHandler implements Runnable {
         return new Response(responseMessage);
     }
 
+    /**
+     * Считает количество элементов, чья дисциплина "меньше" заданной (лексикографически).
+     * <p>
+     * Дисциплины сравниваются по имени. Используется метод {@link CollectionSyncManager#countLessThanDiscipline(Discipline)}.
+     * </p>
+     *
+     * @param command команда пользователя, содержащая сериализованный объект типа {@link Discipline}
+     * @return объект {@link Response}, содержащий количество подходящих элементов
+     */
     private Response handleCountLessThanDiscipline(UserCommand command) {
         try {
             Discipline discipline = objectMapper.readValue(command.arguments.get(0).toString(), Discipline.class);
@@ -303,6 +454,15 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    /**
+     * Добавляет новый элемент типа {@link LabWork} в коллекцию.
+     * <p>
+     * Устанавливает владельца элемента и уникальный ID, сохраняет в БД и коллекцию.
+     * </p>
+     *
+     * @param command команда, содержащая добавляемый элемент
+     * @return ответ с результатом операции
+     */
     private Response handleAdd(UserCommand command) {
         try {
             LabWork labWork = objectMapper.readValue(command.arguments.get(0).toString(), LabWork.class);
@@ -319,6 +479,16 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    /**
+     * Обновляет существующий элемент коллекции по его ID.
+     * <p>
+     * Проверяет, что пользователь является владельцем элемента,
+     * обновляет запись в БД и в памяти.
+     * </p>
+     *
+     * @param command команда, содержащая ID и новые данные элемента
+     * @return ответ с результатом обновления
+     */
     private Response handleUpdateId(UserCommand command) {
         try {
             int id = Integer.parseInt(command.arguments.get(0).toString());

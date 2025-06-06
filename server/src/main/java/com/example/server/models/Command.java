@@ -5,6 +5,10 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
 import java.util.List;
 
+/**
+ * Базовый абстрактный класс для представления команд в системе.
+ * @see UserCommand
+ */
 @JsonTypeInfo(
         use = JsonTypeInfo.Id.NAME,
         include = JsonTypeInfo.As.PROPERTY,

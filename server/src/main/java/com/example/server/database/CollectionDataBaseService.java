@@ -206,7 +206,14 @@ public class CollectionDataBaseService {
             throw new RuntimeException("Clear collection failed for user " + login);
         }
     }
-
+    /**
+     * Создает объект {@link LabWork} на основе данных из {@link ResultSet}.
+     *
+     * @param rs объект {@link ResultSet}, содержащий данные строки таблицы
+     * @return объект типа {@link LabWork}, собранный из текущей строки результата
+     * @throws SQLException если произошла ошибка при чтении данных из ResultSet
+     * @throws RuntimeException если значение enum {@code difficulty} не поддерживается
+     */
     private LabWork createFromResultSet(ResultSet rs) throws SQLException, RuntimeException {
         int id = rs.getInt("id");
         String name = rs.getString("name");
@@ -350,6 +357,17 @@ public class CollectionDataBaseService {
         }
     }
 
+    /**
+     * Сохраняет коллекцию лабораторных работ в базу данных.
+     * <p>
+     * Используется для массовой вставки (batch insert) с использованием {@link PreparedStatement}.
+     * Если у объекта {@link LabWork} отсутствует дисциплина, то соответствующие поля в БД заполняются значением NULL.
+     * </p>
+     *
+     * @param collection коллекция объектов типа {@link LabWork}, которые нужно сохранить
+     * @param ownerLogin логин владельца, который будет установлен у всех записей
+     * @throws RuntimeException если произошла ошибка при взаимодействии с базой данных
+     */
     private void insertAll(Collection<LabWork> collection, String ownerLogin) throws RuntimeException {
         String sql = """
                     INSERT INTO labworks (
@@ -399,7 +417,16 @@ public class CollectionDataBaseService {
             throw new RuntimeException("Save labworks failed");
         }
     }
-
+    /**
+     * Возвращает множество уникальных логинов владельцев лабораторных работ из базы данных.
+     * <p>
+     * Выполняет SQL-запрос на выборку уникальных значений столбца "owner_login"
+     * из таблицы "labworks".
+     * </p>
+     *
+     * @return множество строк, представляющих логины пользователей
+     * @throws SQLException если произошла ошибка при выполнении запроса к БД
+     */
     public Set<String> getAllOwners() throws SQLException {
         Set<String> owners = new HashSet<>();
         String sql = "SELECT DISTINCT owner_login FROM labworks";

@@ -2,28 +2,55 @@ package com.example.client;
 
 import com.example.client.fieldReader.DisciplineFieldReader;
 import com.example.client.fieldReader.LabWorkFieldReader;
-import com.example.client.iomanager.IOManager;
 import com.example.client.iomanager.StandartIOManager;
 import com.example.client.models.*;
 import com.example.client.utils.SHA1;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.*;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Scanner;
 
+/**
+ * Основной класс клиентского приложения, реализующий взаимодействие с сервером через TCP-сокеты.
+ * <p>
+ * Поддерживает следующие функции:
+ * <ul>
+ *     <li>Регистрация и авторизация пользователей</li>
+ *     <li>Отправка команд на сервер</li>
+ *     <li>Выполнение скриптов из файлов (с защитой от рекурсии)</li>
+ *     <li>Обработка ответов от сервера</li>
+ * </ul>
+ * </p>
+ *
+ * <p><b>Важно:</b> Используется Jackson для сериализации/десериализации JSON.</p>
+ */
 public class Client {
     private static User user;
 
+    /**
+     * Хост сервера по умолчанию.
+     */
     private static final String SERVER_HOST = "localhost";
+
+    /**
+     * Порт сервера по умолчанию.
+     */
     private static final int SERVER_PORT = 8088;
 
-
+    /**
+     * Объект для сериализации/десериализации JSON.
+     */
     private static final ObjectMapper objectMapper = new ObjectMapper();
-
+    /**
+     * Точка входа в клиентское приложение.
+     *
+     * @param args аргументы командной строки (не используются)
+     */
     public static void main(String[] args) {
         System.out.println("Client starting...");
 
@@ -50,56 +77,16 @@ public class Client {
                     continue;
                 }
 
-
-                final String[] tokens = userInput.split(" ");
-                final String commandType = tokens[0];
-                Command command;
-                if (commandType.equalsIgnoreCase("register") || commandType.equalsIgnoreCase("login")) {
-                    final String login = tokens[1];
-                    final String pass = SHA1.hash(tokens[2]);
-
-                    command = new Command(commandType, List.of(login, pass));
-                    if (commandType.equalsIgnoreCase("login")) {
-                        user = new User(login, pass);
-                    }
-                } else {
-
-                    switch (commandType) {
-                        case "add":
-                            LabWorkFieldReader labWorkFieldReader1 = new LabWorkFieldReader(new StandartIOManager());
-                            LabWork labWork1 = labWorkFieldReader1.executeLabWork();
-                            labWork1.setOwnerLogin(user.username);
-                            command = new UserCommand(commandType, List.of(objectMapper.writeValueAsString(labWork1)), user);
-                            break;
-                        case "update":
-                            LabWorkFieldReader labWorkFieldReader2 = new LabWorkFieldReader(new StandartIOManager());
-                            LabWork labWork2 = labWorkFieldReader2.executeLabWork();
-                            labWork2.setOwnerLogin(user.username);
-                            command = new UserCommand(commandType, List.of(tokens[1], objectMapper.writeValueAsString(labWork2)), user);
-                            break;
-                        case "count_less_than_discipline":
-                            DisciplineFieldReader disciplineFieldReader = new DisciplineFieldReader(new StandartIOManager());
-                            Discipline discipline = disciplineFieldReader.executeDiscipline();
-                            command = new UserCommand(commandType, List.of(objectMapper.writeValueAsString(discipline)), user);
-                            break;
-                        case "echo", "remove_lower", "remove_by_id", "filter_by_size":
-                            command = new UserCommand(commandType, List.of(tokens[1]), user);
-                            break;
-                        case "exit", "help", "info", "clear", "head", "show", "remove_first", "print_unique_tuned_in_works", "print_field_ascending_discipline":
-                            command = new UserCommand(commandType, List.of(), user);
-                            break;
-                        default:
-                            System.out.println("Unknown command type: " + commandType);
-                            continue;
-                    }
-
+                Command command = create(userInput, out, in, new ArrayList<>());
+                if (command == null) {
+                    continue;
                 }
 
                 out.println(objectMapper.writeValueAsString(command));
 
                 Response response;
                 while (!(response = objectMapper.readValue(in.readLine(), Response.class)).data.equals("EOF")) {
-                    if (commandType.equals("exit")) {
+                    if (userInput.split(" ")[0].equals("exit")) {
                         System.out.println("Server: " + response.data);
                         user = null;
                     } else {
@@ -117,5 +104,108 @@ public class Client {
         } finally {
             System.out.println("Client shutdown.");
         }
+    }
+
+    /**
+     * Создаёт объект команды на основе пользовательского ввода.
+     * <p>
+     * Обрабатывает как простые команды, так и выполнение скриптов из файлов.
+     * Предотвращает бесконечную рекурсию при вложенных скриптах.
+     * </p>
+     *
+     * @param line     строка ввода пользователя
+     * @param out      поток вывода для отправки команд на сервер
+     * @param in       поток ввода для получения ответов от сервера
+     * @param scripts  список уже выполняемых скриптов (для защиты от рекурсии)
+     * @return созданный объект команды или {@code null}, если команда не распознана или произошла ошибка
+     * @throws InterruptedException если поток был прерван
+     * @throws JsonProcessingException если произошла ошибка сериализации
+     */
+    static Command create(String line, PrintWriter out, BufferedReader in, List<String> scripts) throws InterruptedException, JsonProcessingException {
+        final String[] tokens = line.split(" ");
+        final String commandType = tokens[0];
+
+        Command command;
+        if (commandType.equals("run")) {
+            if (scripts.contains(tokens[1])) {
+                System.out.println("Рекурсия: " + scripts);
+                return null;
+            }
+
+            try (BufferedReader reader = new BufferedReader(new FileReader(tokens[1]))) {
+                    String input;
+                    while ((input = reader.readLine()) != null) {
+                        input = input.trim();
+                        if (input.isEmpty()) continue;
+
+                        System.out.println("Выполняется команда: " + input);
+
+                        try {
+                            final List<String> newScripts = new ArrayList<>(List.copyOf(scripts));
+                            newScripts.add(tokens[1]);
+
+                            Command c = create(input, out, in, newScripts);
+                            out.println(objectMapper.writeValueAsString(c));
+
+                            Response response;
+                            while (!(response = objectMapper.readValue(in.readLine(), Response.class)).data.equals("EOF")) {
+                                if (input.split(" ")[0].equals("exit")) {
+                                    System.out.println("Server: " + response.data);
+                                    user = null;
+                                } else {
+                                    System.out.println("Server: " + response.data);
+                                }
+                            }
+                        } catch (Exception e) {
+                            throw new RuntimeException("Не удалось выполнить команду: " + e.getMessage());
+                        }
+                    }
+                } catch (FileNotFoundException e) {
+                    throw new RuntimeException("Файл не найден");
+                } catch (IOException e) {
+                    throw new RuntimeException("Ошибка чтения файла");
+                }
+            return null;
+        } else if (commandType.equalsIgnoreCase("register") || commandType.equalsIgnoreCase("login")) {
+            final String login = tokens[1];
+            final String pass = SHA1.hash(tokens[2]);
+
+            command = new Command(commandType, List.of(login, pass));
+            if (commandType.equalsIgnoreCase("login")) {
+                user = new User(login, pass);
+            }
+        } else {
+            switch (commandType) {
+                case "add":
+                    LabWorkFieldReader labWorkFieldReader1 = new LabWorkFieldReader(new StandartIOManager());
+                    LabWork labWork1 = labWorkFieldReader1.executeLabWork();
+                    labWork1.setOwnerLogin(user.username);
+                    command = new UserCommand(commandType, List.of(objectMapper.writeValueAsString(labWork1)), user);
+                    break;
+                case "update":
+                    LabWorkFieldReader labWorkFieldReader2 = new LabWorkFieldReader(new StandartIOManager());
+                    LabWork labWork2 = labWorkFieldReader2.executeLabWork();
+                    labWork2.setOwnerLogin(user.username);
+                    command = new UserCommand(commandType, List.of(tokens[1], objectMapper.writeValueAsString(labWork2)), user);
+                    break;
+                case "count_less_than_discipline":
+                    DisciplineFieldReader disciplineFieldReader = new DisciplineFieldReader(new StandartIOManager());
+                    Discipline discipline = disciplineFieldReader.executeDiscipline();
+                    command = new UserCommand(commandType, List.of(objectMapper.writeValueAsString(discipline)), user);
+                    break;
+                case "echo", "remove_lower", "remove_by_id", "filter_by_size":
+                    command = new UserCommand(commandType, List.of(tokens[1]), user);
+                    break;
+                case "exit", "help", "info", "clear", "head", "show", "remove_first", "print_unique_tuned_in_works",
+                     "print_field_ascending_discipline":
+                    command = new UserCommand(commandType, List.of(), user);
+                    break;
+                default:
+                    System.out.println("Unknown command type: " + commandType);
+                    return null;
+            }
+
+        }
+        return command;
     }
 } 

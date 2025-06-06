@@ -111,6 +111,10 @@ public class CollectionSyncManager {
             lock.readLock().unlock();
         }
     }
+
+    /**
+     * Возвращает всех пользователей.
+     */
     public List<LabWork> getAll() {
         lock.readLock().lock();
         try {
@@ -120,6 +124,9 @@ public class CollectionSyncManager {
         }
     }
 
+    /**
+     * Сохраняет при завершении
+     */
     public void saveOnExit(CollectionDataBaseService labWorkDAO, String currentOwner) throws RuntimeException {
         lock.readLock().lock();
         try {
@@ -129,19 +136,6 @@ public class CollectionSyncManager {
         }
     }
 
-    /**
-     * Получает первый элемент коллекции (peek).
-     *
-     * @return первый элемент или null, если коллекция пуста
-     */
-    public LabWork getHead() {
-        lock.readLock().lock();
-        try {
-            return collection.peek();
-        } finally {
-            lock.readLock().unlock();
-        }
-    }
 
     public List<LabWork> getAllByOwner(String ownerLogin) {
         lock.readLock().lock();
@@ -180,6 +174,9 @@ public class CollectionSyncManager {
         }
     }
 
+    /**
+     * Подсчёт колличества элементов
+     */
     public int size() {
         lock.readLock().lock();
         try {
