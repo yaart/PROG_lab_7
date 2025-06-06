@@ -125,16 +125,16 @@ public class ClientHandler implements Runnable {
                 return new Response("ERROR: Not logged in. Please login first.");
             }
             return switch (userCommand.name) {
-                case "echo" -> new Response("ECHO: " + userCommand.arguments.get(0).toString());
+                case "echo" -> new Response(userCommand.arguments.get(0).toString());
                 case "add" -> handleAdd(userCommand);
                 case "clear" -> handleClear(userCommand);
                 case "count_less_than_discipline" -> handleCountLessThanDiscipline(userCommand);
                 case "filter_by_size" -> handleFilterBySize(userCommand);
                 case "head" -> handleHead(userCommand);
                 case "help" -> new Response(help_text);
-                case "info" -> handleInfo();
+                case "info" -> handleInfo(userCommand);
                 case "print_field_ascending_discipline" -> handlePrintFieldAscendingDiscipline(userCommand);
-                case "print_unique_tuned_in_works" -> handlePrintUniqueTunedInWorks();
+                case "print_unique_tuned_in_works" -> handlePrintUniqueTunedInWorks(userCommand);
                 case "remove_by_id" -> handleRemoveById(userCommand);
                 case "remove_first" -> handleRemoveFirst(userCommand);
                 case "remove_lower" -> handleRemoveLower(userCommand);
@@ -165,6 +165,9 @@ public class ClientHandler implements Runnable {
      * @return ответ с результатом регистрации
      */
     private Response handleRegister(String username, String password) {
+        if (username == null || username.isEmpty() || password == null || password.isEmpty()) {
+            return new Response("ERROR: Логин и пароль обязательны.");
+        }
         try {
             ServiceLocator.userDataBaseService.registerNewUser(username, password);
         } catch (Exception e) {
@@ -187,6 +190,9 @@ public class ClientHandler implements Runnable {
      * @return ответ с информацией об успешном или неудачном входе
      */
     private Response handleLogin(String username, String password) {
+        if (username == null || username.isEmpty() || password == null || password.isEmpty()) {
+            return new Response("ERROR: Логин и пароль обязательны.");
+        }
         if (ServiceLocator.userDataBaseService.validateCredentials(username, password)) {
             System.out.println("User logged in: " + username);
             return new Response("SUCCESS: Logged in as " + username + ".");
@@ -204,10 +210,10 @@ public class ClientHandler implements Runnable {
      *
      * @return ответ с информацией о коллекции
      */
-    private Response handleInfo() {
+    private Response handleInfo(UserCommand command) {
         String type = ServiceLocator.collectionSyncManager.getCollectionType();
         ZonedDateTime creationDate = ServiceLocator.collectionSyncManager.getCreationDate();
-        int size = ServiceLocator.collectionSyncManager.size();
+        int size = ServiceLocator.collectionSyncManager.getAllByOwner(command.user.username).size();
 
         return new Response("Тип коллекции: " + type + "\nДата инициализации: " + creationDate +
                 "\nЧисло элементов: " + size);
@@ -414,8 +420,8 @@ public class ClientHandler implements Runnable {
      * @return объект {@link Response}, содержащий отсортированный список уникальных значений
      *         или сообщение о том, что таких элементов нет
      */
-    private Response handlePrintUniqueTunedInWorks() {
-        Set<Integer> uniqueValues = ServiceLocator.collectionSyncManager.getForRead().stream()
+    private Response handlePrintUniqueTunedInWorks(UserCommand command) {
+        Set<Integer> uniqueValues = ServiceLocator.collectionSyncManager.getAllByOwner(command.user.username).stream()
                 .map(LabWork::getTunedInWorks)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
@@ -447,7 +453,7 @@ public class ClientHandler implements Runnable {
      */
     private Response handlePrintFieldAscendingDiscipline(UserCommand command) {
 
-        List<String> disciplines = ServiceLocator.collectionSyncManager.getForRead().stream()
+        List<String> disciplines = ServiceLocator.collectionSyncManager.getAllByOwner(command.user.username).stream()
                 .filter(lw -> lw.getDiscipline() != null)
                 .map(lw -> lw.getDiscipline().getName())
                 .sorted()

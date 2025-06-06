@@ -77,6 +77,7 @@ public class Client {
                 }
 
                 Command command = create(userInput, out, in, new ArrayList<>());
+
                 if (command == null) {
                     continue;
                 }
@@ -126,45 +127,61 @@ public class Client {
 
         Command command;
         if (commandType.equals("execute_script")) {
-            if (scripts.contains(tokens[1])) {
-                System.out.println("Рекурсия: " + scripts);
+            if (tokens.length < 2) {
+                System.out.println("ERROR: Укажите имя файла для execute_script");
                 return null;
             }
 
+            String scriptName = tokens[1];
 
-            try (BufferedReader reader = new BufferedReader(new FileReader(tokens[1]))) {
-                    String input;
-                    while ((input = reader.readLine()) != null) {
-                        input = input.trim();
-                        if (input.isEmpty()) continue;
+            if (scripts.contains(scriptName)) {
+                System.err.println("Обнаружена рекурсия! Пропускаем файл: " + scriptName);
 
-                        try {
-                            final List<String> newScripts = new ArrayList<>(List.copyOf(scripts));
-                            newScripts.add(tokens[1]);
+                return new UserCommand("echo", List.of("Recursion was found!"), user);
 
-                            Command c = create(input, out, in, newScripts);
-                            out.println(objectMapper.writeValueAsString(c));
+            }
 
-                            Response response;
-                            while (!(response = objectMapper.readValue(in.readLine(), Response.class)).data.equals("EOF")) {
-                                if (input.split(" ")[0].equals("exit")) {
-                                    System.out.println("Server: " + response.data);
-                                    user = null;
-                                } else {
-                                    System.out.println("Server: " + response.data);
-                                }
+            try (BufferedReader reader = new BufferedReader(new FileReader(scriptName))) {
+                String input;
+                List<String> newScripts = new ArrayList<>(scripts);
+                newScripts.add(scriptName);
+
+                while ((input = reader.readLine()) != null) {
+                    input = input.trim();
+                    if (input.isEmpty()) continue;
+
+                    try {
+                        Command c = create(input, out, in, newScripts);
+                        if (c == null) continue;
+
+                        out.println(objectMapper.writeValueAsString(c));
+
+                        Response response;
+                        while (!(response = objectMapper.readValue(in.readLine(), Response.class)).data.equals("EOF")) {
+                            if ("exit".equals(input.split(" ")[0])) {
+                                user = null;
                             }
-                        } catch (Exception e) {
-                            throw new RuntimeException("Не удалось выполнить команду: " + e.getMessage());
+                            System.out.println("Server: " + response.data);
                         }
+                    } catch (Exception e) {
+                        System.err.println("Ошибка при выполнении команды из скрипта: " + e.getMessage());
+                        // Не прерываем выполнение всего скрипта
                     }
-                } catch (FileNotFoundException e) {
-                    throw new RuntimeException("Файл не найден");
-                } catch (IOException e) {
-                    throw new RuntimeException("Ошибка чтения файла");
                 }
-            return null;
+            } catch (FileNotFoundException e) {
+                System.err.println("Файл не найден: " + scriptName);
+            } catch (IOException e) {
+                System.err.println("Ошибка чтения файла: " + e.getMessage());
+            }
+
+            return null; // завершающая команда
         } else if (commandType.equalsIgnoreCase("register") || commandType.equalsIgnoreCase("login")) {
+
+            if (tokens.length < 3 ||tokens[1] == null || tokens[1].trim().isEmpty()|| tokens[2] == null || tokens[2].trim().isEmpty()) {
+                System.out.println("ERROR: Нужны логин и пароль для команды '" + commandType);
+                return null;
+            }
+
             final String login = tokens[1];
             final String pass = SHA1.hash(tokens[2]);
 

@@ -1,4 +1,3 @@
-login aaa aaa
 show
 info
 head

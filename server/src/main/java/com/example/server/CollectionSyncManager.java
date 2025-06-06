@@ -19,6 +19,7 @@ public class CollectionSyncManager {
     private final Logger logger = LogManager.getLogger();
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
     private final PriorityQueue<LabWork> collection = new PriorityQueue<>();
+    
 
     public CollectionSyncManager() {}
 
