@@ -45,6 +45,13 @@ public class UserDataBaseService {
      * @param passwordHash хэш пароля
      * @return true, если данные верны, false в противном случае или при ошибке
      */
+    /**
+     * Проверяет логин и пароль в БД.
+     *
+     * @param login логин
+     * @param passwordHash хэш пароля
+     * @return true, если данные верны, false в противном случае или при ошибке
+     */
     public boolean validateCredentials(String login, String passwordHash) {
         String sql = "SELECT password_hash FROM users WHERE login = ?";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {

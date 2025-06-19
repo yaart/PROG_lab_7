@@ -141,7 +141,7 @@ public class ClientHandler implements Runnable {
                 case "show" -> handleShow(userCommand);
                 case "update" -> handleUpdateId(userCommand);
                 case "exit" -> new Response("INFO: Exiting");
-                case "show_owner" -> handleShowOwner(userCommand);
+                case "show_owner" -> handleShowOwner();
                 default -> new Response("ERROR: Unknown command: " + command);
             };
         } else {
@@ -286,8 +286,6 @@ public class ClientHandler implements Runnable {
      * </p>
      *
      * <p>Если коллекция пользователя пуста, возвращается сообщение "Empty".</p>
-     *
-     * @param command команда от пользователя, содержащая информацию о владельце (пользователе)
      * @return объект {@link Response}, содержащий:
      *         <ul>
      *             <li>список всех элементов пользователя, разделённых переводом строки</li>
@@ -295,7 +293,7 @@ public class ClientHandler implements Runnable {
      *             <li>ошибку, если произошло исключение</li>
      *         </ul>
      */
-    private Response handleShowOwner(UserCommand command) {
+    private Response handleShowOwner() {
         try {
             List<LabWork> labWorks = ServiceLocator.collectionSyncManager.getAll().stream()
                     .distinct()
